@@ -53,6 +53,9 @@ def get_args_parser():
                         help="File path to import Config class from")
     parser.add_argument('--dataset', default="/dataset/imagenet/",
                         help='path to dataset')
+    parser.add_argument('--dataset-type', type=str, default='imagenet', 
+                        choices=['imagenet', 'cifar10', 'cifar100'],
+                        help='type of dataset to use')
     parser.add_argument("--calib-size", default=argparse.SUPPRESS,
                         type=int, help="size of calibration set")
     parser.add_argument("--optim-size", default=1024,
@@ -212,7 +215,15 @@ def main(args):
     model.to(device)
     model.eval()
     data_path = args.dataset
-    g = mydatasets.ViTImageNetLoaderGenerator(data_path, args.val_batch_size, args.num_workers, kwargs={"model":model})
+    
+    # Create appropriate loader based on dataset type
+    if args.dataset_type == 'imagenet':
+        g = mydatasets.ViTImageNetLoaderGenerator(data_path, args.val_batch_size, args.num_workers, kwargs={"model":model})
+    elif args.dataset_type in ['cifar10', 'cifar100']:
+        g = mydatasets.CifarLoaderGenerator(data_path, which=args.dataset_type, val_batch_size=args.val_batch_size, 
+                                           num_workers=args.num_workers, kwargs={})
+    else:
+        raise ValueError(f"Unknown dataset type: {args.dataset_type}")
     
     logging.info('Building validation dataloader ...')
     val_loader = g.val_loader()

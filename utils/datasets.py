@@ -128,3 +128,62 @@ class ViTImageNetLoaderGenerator(ImageNetLoaderGenerator):
         config = resolve_data_config(model.default_cfg, model=model)
         self.train_transform = create_transform(**config, is_training=True)
         self.val_transform = create_transform(**config)
+
+
+class CifarLoaderGenerator(LoaderGenerator):
+    """
+    DataLoader for CIFAR-10/100 datasets.
+    Compatible with FIMA-Q quantization pipeline.
+    """
+    def __init__(self, root, which='cifar100', val_batch_size=64, num_workers=2, kwargs={}, train_augment=True):
+        which = which.lower()
+        if which == 'cifar100':
+            from torchvision.datasets import CIFAR100
+            self.ds_cls, self.num_classes = CIFAR100, 100
+        elif which == 'cifar10':
+            from torchvision.datasets import CIFAR10
+            self.ds_cls, self.num_classes = CIFAR10, 10
+        else:
+            raise ValueError(f'which must be cifar10|cifar100, got {which!r}')
+        
+        self.which = which
+        self.train_augment = train_augment
+        super().__init__(root, val_batch_size=val_batch_size, num_workers=num_workers, kwargs=kwargs)
+    
+    def load(self):
+        normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        bicubic = transforms.InterpolationMode.BICUBIC
+        
+        self.val_transform = transforms.Compose([
+            transforms.Resize(224, interpolation=bicubic),
+            transforms.ToTensor(),
+            normalize,
+        ])
+        
+        if self.train_augment:
+            self.train_transform = transforms.Compose([
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.Resize(224, interpolation=bicubic),
+                transforms.ToTensor(),
+                normalize,
+            ])
+        else:
+            self.train_transform = self.val_transform
+        
+        print(f'Loading {self.which} into {self.root} ...')
+        self._train_set = self.ds_cls(root=self.root, train=True, download=True,
+                                       transform=self.train_transform)
+        self._val_set = self.ds_cls(root=self.root, train=False, download=True,
+                                     transform=self.val_transform)
+        print(f'{self.which}: train={len(self._train_set)}, val={len(self._val_set)}, '
+              f'classes={self.num_classes}')
+    
+    @property
+    def train_set(self):
+        return self._train_set
+
+    @property
+    def val_set(self):
+        return self._val_set
