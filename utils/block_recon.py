@@ -39,12 +39,50 @@ def vit_block_forward(self, x: torch.Tensor) -> torch.Tensor:
 
 
 
+# def swin_block_forward(self, x):
+#     B, H, W, C = x.shape
+#     shortcut = x
+#     x = self.norm1(x)
+#     if self.shift_size > 0:
+#         shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+#     else:
+#         shifted_x = x
+#     x_windows = window_partition(shifted_x, self.window_size)  # num_win*B, window_size, window_size, C
+#     x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # num_win*B, window_size*window_size, C
+#     attn_windows = self.attn(x_windows, mask=self.attn_mask)  # num_win*B, window_size*window_size, C
+#     attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
+#     shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
+#     if self.shift_size > 0:
+#         x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+#     else:
+#         x = shifted_x
+#     x = shortcut + self.drop_path(x)
+#     x = x.reshape(B, -1, C)
+#     x = x + self.drop_path(self.mlp(self.norm2(x)))
+#     x = x.reshape(B, H, W, C)
+#     if self.perturb:
+#         rand_perturb = torch.empty_like(x, dtype=torch.float).uniform_(1, 2) * self.r
+#         x = x + rand_perturb
+#     return x
+
 def swin_block_forward(self, x):
+    _shift_size_h = 0
+    _shift_size_w = 0
+
+    # Determine shift sizes based on whether self.shift_size is an integer or a tuple
+    if isinstance(self.shift_size, tuple):
+        if len(self.shift_size) == 2:
+            _shift_size_h, _shift_size_w = self.shift_size
+        elif len(self.shift_size) == 1:
+            _shift_size_h = _shift_size_w = self.shift_size[0]
+    else:  # Assume it's an integer
+        _shift_size_h = _shift_size_w = self.shift_size
+
     B, H, W, C = x.shape
     shortcut = x
     x = self.norm1(x)
-    if self.shift_size > 0:
-        shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+    if _shift_size_h > 0 or _shift_size_w > 0:  # Check if any shift is active
+        shifted_x = torch.roll(x, shifts=(-_shift_size_h, -_shift_size_w), dims=(1, 2))
     else:
         shifted_x = x
     x_windows = window_partition(shifted_x, self.window_size)  # num_win*B, window_size, window_size, C
@@ -52,8 +90,8 @@ def swin_block_forward(self, x):
     attn_windows = self.attn(x_windows, mask=self.attn_mask)  # num_win*B, window_size*window_size, C
     attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
     shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
-    if self.shift_size > 0:
-        x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+    if _shift_size_h > 0 or _shift_size_w > 0:  # Check if any shift is active
+        x = torch.roll(shifted_x, shifts=(_shift_size_h, _shift_size_w), dims=(1, 2))
     else:
         x = shifted_x
     x = shortcut + self.drop_path(x)
@@ -64,7 +102,6 @@ def swin_block_forward(self, x):
         rand_perturb = torch.empty_like(x, dtype=torch.float).uniform_(1, 2) * self.r
         x = x + rand_perturb
     return x
-
 
 def swin_patchmerging_forward(self, x):
     B, H, W, C = x.shape
