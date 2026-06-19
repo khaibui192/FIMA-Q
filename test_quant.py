@@ -22,7 +22,7 @@ while True:
     try:
         timestamp = datetime.now()
         formatted_timestamp = timestamp.strftime("%Y%m%d_%H%M")
-        root_path = './checkpoints/quant_result/{}'.format(formatted_timestamp)
+        root_path = '/content/drive/MyDrive/checkpoint/quant_result/{}'.format(formatted_timestamp)
         os.makedirs(root_path)
         break
     except FileExistsError:
